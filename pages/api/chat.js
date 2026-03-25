@@ -29,7 +29,7 @@ B2) 질문 유형 분산 (중복 금지):
 
 B3) 원인 후보 분산: 기술/제도/심리/경제/문화 중 서로 다른 것
 
-B4) 각 관점 = 제목 + 2~3문장 (4~7문장 단락 포함 가능)
+B4) 각 관점 = 제목 + 2~3문장
 - 구조적 대응 2개 + 불일치 1개를 문장 속에 포함
 - 단락 마지막 문장: "다만 이 유비가 깨지는 지점은 ___이므로, 질문은 결국 ___을 확인해야 합니다."
 
@@ -49,6 +49,8 @@ B4) 각 관점 = 제목 + 2~3문장 (4~7문장 단락 포함 가능)
 * 각 관점은 짧은 제목([ ] 형식, 결론을 직접 담은 한 문장) + 2~3문장.
 * 전체 응답 500자 이내.
 * 페르소나: '여우'. 자유분방하고 위트 있게. 가볍고 날카롭게.
+* 마지막에 반드시 아래 안내 문구를 고정으로 붙일 것 (생략 금지):
+"마음에 드는 관점이 있으면 골라서 고슴도치에게 더 깊이 생각해달라고 해보세요. 세 관점 모두 아니다 싶으면 다시 다른 관점을 요청해도 돼요."
 
 ### 출력 형식
 [제목1]
@@ -59,6 +61,8 @@ B4) 각 관점 = 제목 + 2~3문장 (4~7문장 단락 포함 가능)
 
 [제목3]
 (2~3문장)
+
+마음에 드는 관점이 있으면 골라서 고슴도치에게 더 깊이 생각해달라고 해보세요. 세 관점 모두 아니다 싶으면 다시 다른 관점을 요청해도 돼요.
 
 ---FOLLOWUP---
 (여우 스타일로 짧고 도발적인 후속 질문 1개)
@@ -112,18 +116,21 @@ const HEDGEHOG_PROMPT = `Dialectical Inference Engine v0.2
 ---NUDGE---
 (여우에게 물어보길 유도하는 넛지 1문장)`;
 
-const CLASSIFY_PROMPT = `사용자의 질문을 아래 두 유형 중 하나로 분류하라.
+const CLASSIFY_PROMPT = `사용자의 질문을 아래 세 유형 중 하나로 분류하라.
 
-fox: 브레인스토밍, 아이디어 발상, 창의적 탐색, 가설적 시나리오, 새로운 방향 모색
-hedgehog: 문제 해결, 분석, 설명, 평가, 철학적 탐구, 깊은 사유, 원인 규명
+fox (넓게 생각하기): 창의적 콘텐츠 생성, 브레인스토밍·아이디어 발상, 투기적·가설적 시나리오
+hedgehog (깊게 생각하기): 스킬 개발, 문제 해결, 분석·평가
+factual (사실 확인): 현실 정치, 최신 사건, 특정 인물 현재 직책·발언, 최신 통계·데이터, 사실 확인이 핵심인 질문
 
-반드시 "fox" 또는 "hedgehog" 중 하나만 출력하라. 다른 텍스트 일절 금지.`;
+애매한 경우는 질문의 맥락과 의도를 보고 가장 적합한 유형으로 판단하라.
 
-const ANALYSIS_PROMPT = `사용자의 질문을 분석해서 아래 형식으로 2~3문장 이내로 출력하라.
-- 의도: 이 질문으로 뭘 얻으려는가 (1문장)
-- 숨겨진 가정: 질문이 전제하고 있는 것 (1문장)
-- 재진술: 핵심을 담아 한 문장으로 다시 쓰기 (1문장)
-전문 용어 없이 자연스럽게. 레이블("의도:", "가정:" 등) 없이 문장으로만 출력.`;
+반드시 "fox", "hedgehog", "factual" 중 하나만 출력하라. 다른 텍스트 일절 금지.`;
+
+const ANALYSIS_PROMPT = `사용자의 질문을 분석해서 2~3문장 이내로 출력하라.
+- 이 질문으로 뭘 얻으려는가 (1문장)
+- 질문이 전제하고 있는 것 (1문장)
+- 핵심을 담아 한 문장으로 다시 쓰기 (1문장)
+전문 용어 없이 자연스럽게. 레이블 없이 문장으로만 출력.`;
 
 const SUMMARY_PROMPT = `아래 대화를 보고 다음 형식으로 요약하라.
 
@@ -142,10 +149,7 @@ const TRANSITION_COMMENTARY = {
   'hedgehog->hedgehog': '직전 답변은 고슴도치가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 이전 결론을 앵커로 삼아 더 근본적인 이유를 파고드는 한 줄로 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
 };
 
-const PERSONA_LABELS = {
-  fox: '브레인스토밍·발산 유형',
-  hedgehog: '분석·수렴 유형',
-};
+const FACTUAL_WARNING = '⚠️ 이 질문은 최신 정보나 사실 확인이 필요한 유형이에요. 학습 데이터 한계로 정확하지 않을 수 있어요. 그래도 구조적 관점에서 생각해볼게요.';
 
 async function callClaude(systemPrompt, messages, model = 'claude-sonnet-4-20250514', maxTokens = 2000) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -165,12 +169,11 @@ async function callClaude(systemPrompt, messages, model = 'claude-sonnet-4-20250
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { message, persona, history, prevPersona, prevAnswer, isSummary, isFirstTurn } = req.body;
+  const { message, persona, history, prevPersona, prevAnswer, isSummary, isFirstTurn, foxRedoCount } = req.body;
 
   if (!persona) return res.status(400).json({ error: 'persona is required' });
 
   try {
-    // 최종 요약
     if (isSummary) {
       const historyText = (history || [])
         .map(m => {
@@ -185,8 +188,8 @@ export default async function handler(req, res) {
     let routedPersona = persona;
     let routeLabel = null;
     let analysis = null;
+    let factualWarning = false;
 
-    // 첫 턴: 질문 분류 + 문제 분석
     if (isFirstTurn) {
       const [classifyResult, analysisResult] = await Promise.all([
         callClaude(CLASSIFY_PROMPT, [{ role: 'user', content: message }], 'claude-haiku-4-5-20251001', 10),
@@ -194,14 +197,17 @@ export default async function handler(req, res) {
       ]);
 
       const classified = classifyResult.trim().toLowerCase();
-      if (classified === 'fox' || classified === 'hedgehog') {
+      if (classified === 'factual') {
+        factualWarning = true;
+        routedPersona = 'hedgehog';
+        routeLabel = '사실 확인 유형';
+      } else if (classified === 'fox' || classified === 'hedgehog') {
         routedPersona = classified;
-        routeLabel = PERSONA_LABELS[classified];
+        routeLabel = classified === 'fox' ? '넓게 생각하기 유형' : '깊게 생각하기 유형';
       }
-      analysis = analysisResult.trim();
+      analysis = factualWarning ? FACTUAL_WARNING : analysisResult.trim();
     }
 
-    // 시스템 프롬프트 구성
     const basePrompt = routedPersona === 'fox' ? FOX_PROMPT : HEDGEHOG_PROMPT;
     let systemPrompt = basePrompt;
 
@@ -221,7 +227,6 @@ export default async function handler(req, res) {
 
     const fullText = await callClaude(systemPrompt, messages);
 
-    // followup / nudge 파싱
     const parts = fullText.split('---FOLLOWUP---');
     const mainText = parts[0].trim();
     let followup = null;
@@ -233,6 +238,11 @@ export default async function handler(req, res) {
       if (subParts[1]) nudge = subParts[1].trim();
     }
 
+    // 여우 재발산 2회 이상 시 넛지 override
+    if (routedPersona === 'fox' && foxRedoCount >= 2) {
+      nudge = '같은 방향을 계속 돌고 있어요. 고슴도치에게 넘기면 이걸 하나로 꿰뚫어줄 것 같은데.';
+    }
+
     return res.status(200).json({
       reply: mainText,
       followup,
@@ -240,6 +250,7 @@ export default async function handler(req, res) {
       routedPersona,
       routeLabel,
       analysis,
+      factualWarning,
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
