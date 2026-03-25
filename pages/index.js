@@ -10,6 +10,7 @@ export default function Home() {
   const [persona, setPersona] = useState('fox');
   const [loading, setLoading] = useState(false);
   const [turnCount, setTurnCount] = useState(0);
+  const [foxRedoCount, setFoxRedoCount] = useState(0);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [midSummary, setMidSummary] = useState(null);
@@ -43,10 +44,11 @@ export default function Home() {
     return null;
   };
 
-  const send = async () => {
-    if (loading || !input.trim() || turnCount >= MAX_TURNS) return;
-    const text = input.trim();
-    const currentPersona = persona;
+  const send = async (overrideInput) => {
+    const text = (overrideInput || input).trim();
+    if (loading || !text || turnCount >= MAX_TURNS) return;
+
+    const isFirstTurn = turnCount === 0;
     const lastBot = getLastBot();
     const prevPersona = lastBot?.persona || null;
     const prevAnswer = lastBot?.text || null;
@@ -58,37 +60,61 @@ export default function Home() {
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setLoading(true);
 
+    // 재발산 횟수 추적
+    const isRedoFox = prevPersona === 'fox' && persona === 'fox';
+    const newFoxRedoCount = isRedoFox ? foxRedoCount + 1 : 0;
+    setFoxRedoCount(newFoxRedoCount);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          persona: currentPersona,
+          persona,
           history: messages,
           prevPersona,
           prevAnswer,
+          isFirstTurn,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '오류가 발생했습니다');
 
+      const actualPersona = data.routedPersona || persona;
+
+      // 재발산 2회 시 넛지 override
+      let nudge = data.nudge || null;
+      if (newFoxRedoCount >= 2 && actualPersona === 'fox') {
+        nudge = '같은 방향을 계속 돌고 있어요. 고슴도치에게 넘기면 이걸 하나로 꿰뚫어줄 것 같은데.';
+      }
+
       const botMsg = {
         role: 'bot',
         text: data.reply,
-        persona: currentPersona,
+        persona: actualPersona,
         followup: data.followup || null,
-        nudge: data.nudge || null,
+        nudge,
+        routeLabel: data.routeLabel || null,
+        analysis: data.analysis || null,
+        turnIndex: newTurn,
       };
 
-      setMessages([...updatedMessages, botMsg]);
+      const newMessages = [...updatedMessages, botMsg];
+      setMessages(newMessages);
       setTurnCount(newTurn);
 
+      // 첫 턴 페르소나 자동 전환
+      if (isFirstTurn && data.routedPersona) {
+        setPersona(data.routedPersona);
+      }
+
+      // 중간 요약
       if (newTurn === MID_SUMMARY_TURN) {
-        fetchMidSummary([...updatedMessages, botMsg]);
+        fetchMidSummary(newMessages);
       }
     } catch (err) {
-      setMessages([...updatedMessages, { role: 'bot', text: '오류: ' + err.message, persona: currentPersona }]);
+      setMessages([...updatedMessages, { role: 'bot', text: '오류: ' + err.message, persona }]);
       setTurnCount(newTurn);
     } finally {
       setLoading(false);
@@ -101,18 +127,17 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          persona: 'fox',
+          persona: 'hedgehog',
           history: currentMessages,
           isSummary: true,
-          summaryType: 'mid',
         }),
       });
       const data = await res.json();
       if (res.ok && data.reply) {
         const lines = data.reply.split('\n').filter(Boolean);
-        const flowLine = lines.find(l => l.includes('발산한 것') || l.includes('수렴한 것'));
-        if (flowLine) setMidSummary(flowLine);
-        else setMidSummary('지금까지 다양한 방향으로 탐색이 이어지고 있어요.');
+        const changed = lines.find(l => l.includes('바뀐 질문'));
+        if (changed) setMidSummary(changed.replace('바뀐 질문:', '').trim());
+        else setMidSummary('지금까지 탐색이 깊어지고 있어요.');
       }
     } catch (e) {}
   };
@@ -123,11 +148,7 @@ export default function Home() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          persona: 'fox',
-          history: messages,
-          isSummary: true,
-        }),
+        body: JSON.stringify({ persona: 'hedgehog', history: messages, isSummary: true }),
       });
       const data = await res.json();
       if (res.ok) setSummary(data.reply);
@@ -162,7 +183,7 @@ export default function Home() {
           <span className="icons">🦊🦔</span>
           <div style={{ flex: 1 }}>
             <div className="title">여우와 고슴도치</div>
-            <div className="subtitle">두 가지 사고방식으로 질문에 답합니다</div>
+            <div className="subtitle">발산과 수렴으로 생각을 깊게</div>
           </div>
           <div className="turn-counter">
             {Array.from({ length: MAX_TURNS }).map((_, i) => (
@@ -177,44 +198,56 @@ export default function Home() {
               <div className="empty-icons">🦊🦔</div>
               <div className="empty-title">무엇이든 물어보세요</div>
               <div className="empty-desc">
-                <b>🦊 여우</b>는 다양한 관점으로 발산합니다<br />
+                질문을 입력하면 유형에 따라 자동으로 배정돼요<br />
+                <b>🦊 여우</b>는 다양한 관점으로 발산하고<br />
                 <b>🦔 고슴도치</b>는 본질로 수렴합니다
               </div>
             </div>
           )}
 
-          {messages.map((msg, i) => (
-            <div key={i}>
-              <div className={`msg ${msg.role} ${msg.persona || ''}`}>
-                {msg.role === 'user' && <div className="label">나</div>}
-                {msg.role === 'bot' && (
-                  <div className={`tag ${msg.persona}`}>
-                    {msg.persona === 'fox' ? '🦊 여우' : '🦔 고슴도치'}
+          {messages.map((msg, i) => {
+            const isLastBot = msg.role === 'bot' && i === messages.length - 1;
+            return (
+              <div key={i}>
+                <div className={`msg ${msg.role} ${msg.persona || ''}`}>
+                  {msg.role === 'user' && <div className="label">나</div>}
+                  {msg.role === 'bot' && (
+                    <div className="bot-header">
+                      <div className={`tag ${msg.persona}`}>
+                        {msg.persona === 'fox' ? '🦊 여우' : '🦔 고슴도치'}
+                      </div>
+                      {msg.routeLabel && (
+                        <div className="route-label">{msg.routeLabel} · 자동 배정</div>
+                      )}
+                    </div>
+                  )}
+                  {msg.analysis && (
+                    <div className="analysis">{msg.analysis}</div>
+                  )}
+                  <div className="bubble">{msg.text}</div>
+                </div>
+
+                {msg.role === 'bot' && (msg.followup || msg.nudge) && (
+                  <div className="hints">
+                    {msg.followup && (
+                      <button className="hint-followup" onClick={() => setFollowupInput(msg.followup)}>
+                        💬 {msg.followup}
+                      </button>
+                    )}
+                    {msg.nudge && (
+                      <div className="hint-nudge">{msg.nudge}</div>
+                    )}
                   </div>
                 )}
-                <div className="bubble">{msg.text}</div>
+
+                {isLastBot && turnCount === MID_SUMMARY_TURN && midSummary && (
+                  <div className="mid-summary">
+                    📍 질문이 이렇게 바뀌고 있어요: <em>{midSummary}</em>
+                  </div>
+                )}
               </div>
-
-              {msg.role === 'bot' && (msg.followup || msg.nudge) && (
-                <div className="hints">
-                  {msg.followup && (
-                    <button className="hint-followup" onClick={() => setFollowupInput(msg.followup)}>
-                      💬 {msg.followup}
-                    </button>
-                  )}
-                  {msg.nudge && (
-                    <div className="hint-nudge">{msg.nudge}</div>
-                  )}
-                </div>
-              )}
-
-              {msg.role === 'bot' && turnCount === MID_SUMMARY_TURN && i === messages.length - 1 && midSummary && (
-                <div className="mid-summary">
-                  📍 {midSummary}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
 
           {loading && (
             <div className={`msg bot ${persona}`}>
@@ -270,7 +303,7 @@ export default function Home() {
                 rows={1}
                 disabled={loading}
               />
-              <button className="send-btn" onClick={send} disabled={loading || !input.trim()}>
+              <button className="send-btn" onClick={() => send()} disabled={loading || !input.trim()}>
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                 </svg>
@@ -286,9 +319,7 @@ export default function Home() {
           font-family: 'Noto Sans KR', sans-serif;
           background: #F7F5F0;
           min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           padding: 1rem;
         }
       `}</style>
@@ -311,10 +342,7 @@ export default function Home() {
         .title { font-family: 'Noto Serif KR', serif; font-size: 17px; font-weight: 600; color: #1A1814; }
         .subtitle { font-size: 11px; color: #8A8580; margin-top: 2px; }
         .turn-counter { display: flex; gap: 5px; align-items: center; }
-        .turn-dot {
-          width: 8px; height: 8px; border-radius: 50%;
-          background: #E8E4DC; transition: background 0.3s;
-        }
+        .turn-dot { width: 8px; height: 8px; border-radius: 50%; background: #E8E4DC; transition: background 0.3s; }
         .turn-dot.done { background: #1A1814; }
 
         .messages {
@@ -339,18 +367,40 @@ export default function Home() {
         .msg.user { align-self: flex-end; align-items: flex-end; }
         .msg.bot { align-self: flex-start; align-items: flex-start; }
         .label { font-size: 11px; color: #8A8580; padding: 0 4px; font-weight: 500; }
+
+        .bot-header { display: flex; align-items: center; gap: 8px; }
         .tag {
           font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500;
           display: inline-flex; align-items: center; gap: 4px;
         }
         .tag.fox { background: #FDF3E3; color: #C9853A; border: 1px solid #F0C98A; }
         .tag.hedgehog { background: #F0EEFF; color: #6B5CE7; border: 1px solid #B8AEFF; }
+        .route-label { font-size: 10px; color: #8A8580; }
+
+        .analysis {
+          font-size: 12px; color: #6A6660;
+          padding: 8px 12px;
+          background: #F7F5F0;
+          border-radius: 8px;
+          border-left: 2px solid #D8D4CC;
+          line-height: 1.7;
+          font-style: italic;
+          max-width: 100%;
+        }
+
         .bubble {
           padding: 12px 16px; border-radius: 16px;
           font-size: 14px; line-height: 1.75; border: 1px solid #E8E4DC;
         }
-        .msg.user .bubble { background: #1A1814; color: #fff; border-color: transparent; border-top-right-radius: 4px; }
-        .msg.bot .bubble { background: #fff; color: #1A1814; border-top-left-radius: 4px; white-space: pre-wrap; word-break: keep-all; }
+        .msg.user .bubble {
+          background: #1A1814; color: #fff;
+          border-color: transparent; border-top-right-radius: 4px;
+        }
+        .msg.bot .bubble {
+          background: #fff; color: #1A1814;
+          border-top-left-radius: 4px;
+          white-space: pre-wrap; word-break: keep-all;
+        }
         .msg.bot.fox .bubble { border-color: #F0C98A; }
         .msg.bot.hedgehog .bubble { border-color: #B8AEFF; }
 
@@ -378,14 +428,13 @@ export default function Home() {
         .hint-nudge { font-size: 11px; color: #8A8580; padding: 0 4px; font-style: italic; }
 
         .mid-summary {
-          margin-top: 6px;
-          padding: 8px 12px;
-          background: #F5F2EC;
-          border-radius: 8px;
-          font-size: 12px;
-          color: #5A5650;
+          margin-top: 6px; padding: 8px 12px;
+          background: #F5F2EC; border-radius: 8px;
+          font-size: 12px; color: #5A5650;
           border-left: 2px solid #C8C4BC;
+          line-height: 1.6;
         }
+        .mid-summary em { font-style: normal; color: #1A1814; font-weight: 500; }
 
         .done-area {
           display: flex; flex-direction: column; align-items: center;
@@ -396,8 +445,7 @@ export default function Home() {
           padding: 10px 24px; border-radius: 20px;
           border: 1.5px solid #1A1814; background: transparent;
           font-size: 13px; color: #1A1814; cursor: pointer;
-          font-family: 'Noto Sans KR', sans-serif;
-          transition: all 0.2s;
+          font-family: 'Noto Sans KR', sans-serif; transition: all 0.2s;
         }
         .summary-btn:hover { background: #1A1814; color: #fff; }
         .summary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
