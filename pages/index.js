@@ -54,16 +54,14 @@ export default function Home() {
     const prevAnswer = lastBot?.text || null;
     const newTurn = turnCount + 1;
 
+    const isRedoFox = prevPersona === 'fox' && persona === 'fox';
+    const newFoxRedoCount = isRedoFox ? foxRedoCount + 1 : foxRedoCount;
+
     const updatedMessages = [...messages, { role: 'user', text }];
     setMessages(updatedMessages);
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setLoading(true);
-
-    // 재발산 횟수 추적
-    const isRedoFox = prevPersona === 'fox' && persona === 'fox';
-    const newFoxRedoCount = isRedoFox ? foxRedoCount + 1 : 0;
-    setFoxRedoCount(newFoxRedoCount);
 
     try {
       const res = await fetch('/api/chat', {
@@ -76,6 +74,7 @@ export default function Home() {
           prevPersona,
           prevAnswer,
           isFirstTurn,
+          foxRedoCount: newFoxRedoCount,
         }),
       });
       const data = await res.json();
@@ -83,33 +82,27 @@ export default function Home() {
 
       const actualPersona = data.routedPersona || persona;
 
-      // 재발산 2회 시 넛지 override
-      let nudge = data.nudge || null;
-      if (newFoxRedoCount >= 2 && actualPersona === 'fox') {
-        nudge = '같은 방향을 계속 돌고 있어요. 고슴도치에게 넘기면 이걸 하나로 꿰뚫어줄 것 같은데.';
-      }
-
       const botMsg = {
         role: 'bot',
         text: data.reply,
         persona: actualPersona,
         followup: data.followup || null,
-        nudge,
+        nudge: data.nudge || null,
         routeLabel: data.routeLabel || null,
         analysis: data.analysis || null,
+        factualWarning: data.factualWarning || false,
         turnIndex: newTurn,
       };
 
       const newMessages = [...updatedMessages, botMsg];
       setMessages(newMessages);
       setTurnCount(newTurn);
+      setFoxRedoCount(newFoxRedoCount);
 
-      // 첫 턴 페르소나 자동 전환
       if (isFirstTurn && data.routedPersona) {
         setPersona(data.routedPersona);
       }
 
-      // 중간 요약
       if (newTurn === MID_SUMMARY_TURN) {
         fetchMidSummary(newMessages);
       }
@@ -183,7 +176,7 @@ export default function Home() {
           <span className="icons">🦊🦔</span>
           <div style={{ flex: 1 }}>
             <div className="title">여우와 고슴도치</div>
-            <div className="subtitle">발산과 수렴으로 생각을 깊게</div>
+            <div className="subtitle">넓게 생각하고, 깊게 파고들기</div>
           </div>
           <div className="turn-counter">
             {Array.from({ length: MAX_TURNS }).map((_, i) => (
@@ -198,9 +191,8 @@ export default function Home() {
               <div className="empty-icons">🦊🦔</div>
               <div className="empty-title">무엇이든 물어보세요</div>
               <div className="empty-desc">
-                질문을 입력하면 유형에 따라 자동으로 배정돼요<br />
-                <b>🦊 여우</b>는 다양한 관점으로 발산하고<br />
-                <b>🦔 고슴도치</b>는 본질로 수렴합니다
+                <b>🦊 여우</b>는 다양한 각도로 넓게 생각해요<br />
+                <b>🦔 고슴도치</b>는 핵심을 깊이 파고들어요
               </div>
             </div>
           )}
@@ -222,7 +214,9 @@ export default function Home() {
                     </div>
                   )}
                   {msg.analysis && (
-                    <div className="analysis">{msg.analysis}</div>
+                    <div className={`analysis ${msg.factualWarning ? 'factual' : ''}`}>
+                      {msg.analysis}
+                    </div>
                   )}
                   <div className="bubble">{msg.text}</div>
                 </div>
@@ -387,6 +381,12 @@ export default function Home() {
           font-style: italic;
           max-width: 100%;
         }
+        .analysis.factual {
+          background: #FFF8EC;
+          border-left-color: #E8A030;
+          color: #7A5A20;
+          font-style: normal;
+        }
 
         .bubble {
           padding: 12px 16px; border-radius: 16px;
@@ -431,8 +431,7 @@ export default function Home() {
           margin-top: 6px; padding: 8px 12px;
           background: #F5F2EC; border-radius: 8px;
           font-size: 12px; color: #5A5650;
-          border-left: 2px solid #C8C4BC;
-          line-height: 1.6;
+          border-left: 2px solid #C8C4BC; line-height: 1.6;
         }
         .mid-summary em { font-style: normal; color: #1A1814; font-weight: 500; }
 
