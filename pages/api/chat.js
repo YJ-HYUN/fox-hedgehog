@@ -29,9 +29,14 @@ B2) 질문 유형 분산 (중복 금지):
 
 B3) 원인 후보 분산: 기술/제도/심리/경제/문화 중 서로 다른 것
 
-B4) 각 관점 = 질문 1개 + 에세이 1단락 (4~7문장)
+B4) 각 관점 = 제목 + 2~3문장 (4~7문장 단락 포함 가능)
 - 구조적 대응 2개 + 불일치 1개를 문장 속에 포함
-- 마지막 문장: "다만 이 유비가 깨지는 지점은 ___이므로, 질문은 결국 ___을 확인해야 합니다."
+- 단락 마지막 문장: "다만 이 유비가 깨지는 지점은 ___이므로, 질문은 결국 ___을 확인해야 합니다."
+
+## 중간 턴 행동 지침
+2번째 이후 질문에서는:
+- 새로운 브레인스토밍이 아니라 앞선 논의의 빈틈/전제/주체/시간축을 건드리는 역할
+- 재발산 요청 시 이전에 제시한 관점과 겹치지 않는 새로운 3가지 제시
 
 ## 반론 대응
 사용자가 관점에 반론을 제기하면, 반론을 새로운 관점의 출발점으로 삼아 발산하라.
@@ -41,7 +46,7 @@ B4) 각 관점 = 질문 1개 + 에세이 1단락 (4~7문장)
 
 ### 출력 규칙
 * Core Question 출력 금지. 바로 관점 3개로 시작.
-* 각 관점은 짧은 제목([ ] 형식) + 2~3문장.
+* 각 관점은 짧은 제목([ ] 형식, 결론을 직접 담은 한 문장) + 2~3문장.
 * 전체 응답 500자 이내.
 * 페르소나: '여우'. 자유분방하고 위트 있게. 가볍고 날카롭게.
 
@@ -75,25 +80,19 @@ const HEDGEHOG_PROMPT = `Dialectical Inference Engine v0.2
 사용자가 결론에 반론을 제기하면, 반론의 타당성을 먼저 판단한 후 응답하라.
 타당하면 결론을 수정하거나 한 단계 더 깊이 들어가고, 타당하지 않으면 왜 성립하지 않는지 건조하게 짚어라.
 
+## 심화 요청 대응
+사용자가 더 깊이 생각해달라고 하면, 이전 결론을 앵커로 삼아 그 결론이 성립하는 더 근본적인 이유를 파고들어라.
+
+## 재발산 감지
+결론이 강하게 수렴됐을 때, 마지막에 재발산이 필요한 지점이 있다면 한 줄로 암시하라.
+
 ## 변증법 유형 판별 (내부 수행)
-유형 판별은 질문의 언어적 형식이 아니라 문제의 실질적 구조에 의해 결정된다.
-
-유형 1: 전복의 변증법 (1원적)
-- 하나의 명제가 자기 전제를 끝까지 밀면 스스로를 뒤집는다.
-- "A는 B가 아니라 사실은 C이다" 형태
-
-유형 2: 상관성의 변증법 (2원적)
-- 두 항이 상대 항 없이는 자기 의미를 완성하지 못하는 상호의존 관계
-- 공유 전제를 한 단계 고양하여 재정의
-
-유형 3: 유기조직화의 변증법 (3원적)
-- 보편적 목적 아래 특수한 계기들이 분화·도출된 뒤 유기적으로 재조직
-- 창발적 통일
-
-비변증법적 문제: 2~3문장으로 직접 답할 것.
+유형 1: 전복의 변증법 — 하나의 명제가 자기 전제를 끝까지 밀면 스스로를 뒤집는다. "A는 B가 아니라 C이다" 형태.
+유형 2: 상관성의 변증법 — 두 항이 상대 항 없이는 자기 의미를 완성하지 못하는 상호의존 관계. 공유 전제를 한 단계 고양하여 재정의.
+유형 3: 유기조직화의 변증법 — 보편적 목적 아래 특수한 계기들이 분화·도출된 뒤 유기적으로 재조직. 창발적 통일.
+비변증법: 2~3문장으로 직접 답할 것.
 
 ## 유형별 추론 절차 (내부 수행 — 출력 금지)
-
 유형 1: 정립(명제+전제) → 반정립(내적 모순→전복) → 반정립=종합
 유형 2: 정립(명제+전제) → 반정립(상관자 도입) → 종합(상보적 통일)
 유형 3: 정립(보편적 목적) → 반정립(핵심 요소 3~5개 도출) → 종합(유기적 재조직)
@@ -113,91 +112,116 @@ const HEDGEHOG_PROMPT = `Dialectical Inference Engine v0.2
 ---NUDGE---
 (여우에게 물어보길 유도하는 넛지 1문장)`;
 
-const SUMMARY_PROMPT = `아래 대화를 보고 세 가지로 요약하라.
-형식:
-발산한 것: (여우가 펼친 관점들의 핵심을 1~2문장으로)
-수렴한 것: (고슴도치가 도달한 결론을 1~2문장으로. 고슴도치 대화가 없으면 "아직 수렴하지 않음"으로)
-아직 열린 질문: (이 대화가 답하지 못한 것 1문장)
-전체 200자 이내. 건조하고 명확하게.`;
+const CLASSIFY_PROMPT = `사용자의 질문을 아래 두 유형 중 하나로 분류하라.
+
+fox: 브레인스토밍, 아이디어 발상, 창의적 탐색, 가설적 시나리오, 새로운 방향 모색
+hedgehog: 문제 해결, 분석, 설명, 평가, 철학적 탐구, 깊은 사유, 원인 규명
+
+반드시 "fox" 또는 "hedgehog" 중 하나만 출력하라. 다른 텍스트 일절 금지.`;
+
+const ANALYSIS_PROMPT = `사용자의 질문을 분석해서 아래 형식으로 2~3문장 이내로 출력하라.
+- 의도: 이 질문으로 뭘 얻으려는가 (1문장)
+- 숨겨진 가정: 질문이 전제하고 있는 것 (1문장)
+- 재진술: 핵심을 담아 한 문장으로 다시 쓰기 (1문장)
+전문 용어 없이 자연스럽게. 레이블("의도:", "가정:" 등) 없이 문장으로만 출력.`;
+
+const SUMMARY_PROMPT = `아래 대화를 보고 다음 형식으로 요약하라.
+
+처음 질문: [사용자가 처음 던진 질문 그대로]
+
+바뀐 질문: [대화를 통해 발전된 질문. 더 정확하고 깊어진 형태로. 1~2문장]
+
+나아진 점: [이 대화로 사고가 어떻게 진화했는지. 처음과 비교해 무엇이 명확해졌는지. 2~3문장]
+
+건조하고 명확하게. 과장 없이.`;
 
 const TRANSITION_COMMENTARY = {
-  'fox->fox': '직전 답변은 여우가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 이전 관점들을 한 줄로 비틀거나 새 각도를 암시하며 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
+  'fox->fox': '직전 답변은 여우가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 이전 관점들을 한 줄로 비틀거나 새 각도를 암시하며 시작하라. 재발산 요청이라면 이전에 제시한 관점과 겹치지 않는 새로운 방향으로. 관련 없으면 논평 없이 바로 시작하라.',
   'fox->hedgehog': '직전 답변은 여우가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 그 발산들을 냉정하게 꿰뚫는 한 줄로 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
   'hedgehog->fox': '직전 답변은 고슴도치가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 그 결론에 균열을 내는 한 줄로 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
-  'hedgehog->hedgehog': '직전 답변은 고슴도치가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 이전 결론을 앵커로 삼아 한 단계 더 깊이 들어가는 한 줄로 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
+  'hedgehog->hedgehog': '직전 답변은 고슴도치가 한 것이다. 현재 질문이 직전 주제와 연관이 있으면, 이전 결론을 앵커로 삼아 더 근본적인 이유를 파고드는 한 줄로 시작하라. 관련 없으면 논평 없이 바로 시작하라.',
 };
 
+const PERSONA_LABELS = {
+  fox: '브레인스토밍·발산 유형',
+  hedgehog: '분석·수렴 유형',
+};
+
+async function callClaude(systemPrompt, messages, model = 'claude-sonnet-4-20250514', maxTokens = 2000) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || 'API error');
+  return data.content?.[0]?.text || '';
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { message, persona, history, prevPersona, prevAnswer, isSummary } = req.body;
+  const { message, persona, history, prevPersona, prevAnswer, isSummary, isFirstTurn } = req.body;
 
-  if (!persona) {
-    return res.status(400).json({ error: 'persona is required' });
-  }
+  if (!persona) return res.status(400).json({ error: 'persona is required' });
 
   try {
-    let systemPrompt;
-    let messages;
-
+    // 최종 요약
     if (isSummary) {
-      systemPrompt = SUMMARY_PROMPT;
       const historyText = (history || [])
         .map(m => {
           const speaker = m.role === 'user' ? '사용자' : m.persona === 'fox' ? '🦊 여우' : '🦔 고슴도치';
           return `${speaker}: ${m.text}`;
         })
         .join('\n');
-      messages = [{ role: 'user', content: `대화 내용:\n${historyText}` }];
-    } else {
-      const basePrompt = persona === 'fox' ? FOX_PROMPT : HEDGEHOG_PROMPT;
+      const reply = await callClaude(SUMMARY_PROMPT, [{ role: 'user', content: `대화 내용:\n${historyText}` }]);
+      return res.status(200).json({ reply });
+    }
 
-      if (prevPersona && prevAnswer) {
-        const transitionKey = `${prevPersona}->${persona}`;
-        const commentary = TRANSITION_COMMENTARY[transitionKey] || '';
-        systemPrompt = `[직전 답변]: ${prevAnswer}\n\n[전환 지시]: ${commentary}\n\n${basePrompt}`;
-      } else {
-        systemPrompt = basePrompt;
+    let routedPersona = persona;
+    let routeLabel = null;
+    let analysis = null;
+
+    // 첫 턴: 질문 분류 + 문제 분석
+    if (isFirstTurn) {
+      const [classifyResult, analysisResult] = await Promise.all([
+        callClaude(CLASSIFY_PROMPT, [{ role: 'user', content: message }], 'claude-haiku-4-5-20251001', 10),
+        callClaude(ANALYSIS_PROMPT, [{ role: 'user', content: message }], 'claude-haiku-4-5-20251001', 200),
+      ]);
+
+      const classified = classifyResult.trim().toLowerCase();
+      if (classified === 'fox' || classified === 'hedgehog') {
+        routedPersona = classified;
+        routeLabel = PERSONA_LABELS[classified];
       }
-
-      messages = [
-        ...(history || []).map(m => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.text,
-        })),
-        { role: 'user', content: message },
-      ];
+      analysis = analysisResult.trim();
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages,
-      }),
-    });
+    // 시스템 프롬프트 구성
+    const basePrompt = routedPersona === 'fox' ? FOX_PROMPT : HEDGEHOG_PROMPT;
+    let systemPrompt = basePrompt;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data?.error?.message || 'API error' });
+    if (prevPersona && prevAnswer) {
+      const transitionKey = `${prevPersona}->${routedPersona}`;
+      const commentary = TRANSITION_COMMENTARY[transitionKey] || '';
+      systemPrompt = `[직전 답변]: ${prevAnswer}\n\n[전환 지시]: ${commentary}\n\n${basePrompt}`;
     }
 
-    const fullText = data.content?.[0]?.text || '';
+    const messages = [
+      ...(history || []).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      })),
+      { role: 'user', content: message },
+    ];
 
-    if (isSummary) {
-      return res.status(200).json({ reply: fullText });
-    }
+    const fullText = await callClaude(systemPrompt, messages);
 
+    // followup / nudge 파싱
     const parts = fullText.split('---FOLLOWUP---');
     const mainText = parts[0].trim();
     let followup = null;
@@ -209,7 +233,14 @@ export default async function handler(req, res) {
       if (subParts[1]) nudge = subParts[1].trim();
     }
 
-    return res.status(200).json({ reply: mainText, followup, nudge });
+    return res.status(200).json({
+      reply: mainText,
+      followup,
+      nudge,
+      routedPersona,
+      routeLabel,
+      analysis,
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
